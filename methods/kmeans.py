@@ -87,7 +87,12 @@ class KMeansClusteringResults(ClusteringResults):
         self, samples, config, brain_key, embeddings=None, method=None
     ):
         ClusteringResults.__init__(
-            self, samples, config, brain_key, embeddings=None, method=method
+            self,
+            samples,
+            config,
+            brain_key,
+            embeddings=embeddings,
+            method=method,
         )
 
     @property
