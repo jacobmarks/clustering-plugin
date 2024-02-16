@@ -20,8 +20,6 @@ class KMeansClusteringConfig(ClusteringConfig):
             if one was provided
         model (None): the :class:`fiftyone.core.models.Model` or name of the
             zoo model that was used to compute embeddings, if known
-        patches_field (None): the sample field defining the patches being
-            analyzed, if any
         n_clusters (8): the number of clusters to create
         init (``'k-means++'``): the method for initializing the cluster
             centroids. Supported values are ``('k-means++', 'random')``
@@ -35,9 +33,6 @@ class KMeansClusteringConfig(ClusteringConfig):
 
     def __init__(
         self,
-        embeddings_field=None,
-        model=None,
-        patches_field=None,
         n_clusters=8,
         init="k-means++",
         n_init=10,
@@ -46,12 +41,6 @@ class KMeansClusteringConfig(ClusteringConfig):
         random_state=None,
         **kwargs,
     ):
-        if model is not None and not etau.is_str(model):
-            model = None
-
-        self.embeddings_field = embeddings_field
-        self.model = model
-        self.patches_field = patches_field
         self.n_clusters = n_clusters
         self.init = init
         self.n_init = n_init
@@ -59,12 +48,7 @@ class KMeansClusteringConfig(ClusteringConfig):
         self.tol = tol
         self.random_state = random_state
 
-        super().__init__(
-            embeddings_field=embeddings_field,
-            model=model,
-            patches_field=patches_field,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
 
     @property
     def method(self):

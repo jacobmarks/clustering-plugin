@@ -20,8 +20,6 @@ class AgglomerativeClusteringConfig(ClusteringConfig):
             if one was provided
         model (None): the :class:`fiftyone.core.models.Model` or name of the
             zoo model that was used to compute embeddings, if known
-        patches_field (None): the sample field defining the patches being
-            analyzed, if any
         n_clusters (2): the number of clusters to find
         affinity (``'euclidean'``): the metric used to compute the linkage.
             Can be ``'euclidean'``, ``'l1'``, ``'l2'``, ``'manhattan'``,
@@ -45,9 +43,6 @@ class AgglomerativeClusteringConfig(ClusteringConfig):
 
     def __init__(
         self,
-        embeddings_field=None,
-        model=None,
-        patches_field=None,
         n_clusters=2,
         metric="euclidean",
         memory=None,
@@ -58,12 +53,7 @@ class AgglomerativeClusteringConfig(ClusteringConfig):
         compute_distances=False,
         **kwargs,
     ):
-        if model is not None and not etau.is_str(model):
-            model = None
 
-        self.embeddings_field = embeddings_field
-        self.model = model
-        self.patches_field = patches_field
         self.n_clusters = n_clusters
         self.metric = metric
         self.memory = memory
@@ -73,12 +63,7 @@ class AgglomerativeClusteringConfig(ClusteringConfig):
         self.distance_threshold = distance_threshold
         self.compute_distances = compute_distances
 
-        super().__init__(
-            embeddings_field=embeddings_field,
-            model=model,
-            patches_field=patches_field,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
 
     @property
     def method(self):
@@ -91,20 +76,18 @@ class AgglomerativeClusteringResults(ClusteringResults):
     Args:
         samples: the :class:`fiftyone.core.collections.SampleCollection` used
         config: the :class:`AgglomerativeClusteringConfig` used
-        brain_key: the brain key
+        run_key: the run key
         embeddings (None): a ``num_embeddings x num_dims`` array of embeddings
             applicable
         method (None): a :class:`AgglomerativeClustering` instance
     """
 
-    def __init__(
-        self, samples, config, brain_key, embeddings=None, method=None
-    ):
+    def __init__(self, samples, config, run_key, embeddings=None, method=None):
         ClusteringResults.__init__(
             self,
             samples,
             config,
-            brain_key,
+            run_key,
             embeddings=embeddings,
             method=method,
         )
@@ -138,7 +121,7 @@ class AgglomerativeClustering(Clustering):
         config: an :class:`AgglomerativeClusteringConfig`
     """
 
-    def initialize(self, samples, brain_key):
+    def initialize(self, samples, run_key):
         return AgglomerativeClusteringResults(
-            samples, self.config, brain_key, method=self
+            samples, self.config, run_key, method=self
         )

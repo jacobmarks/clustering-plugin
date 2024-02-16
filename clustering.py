@@ -4,14 +4,14 @@ import fiftyone as fo
 import fiftyone.zoo as foz
 from fiftyone import ViewField as F
 
-import fiftyone.core.brain as fcb
+import fiftyone.core.runs as foruns
 import fiftyone.core.validation as fov
 import fiftyone.core.utils as fou
 
 fbu = fou.lazy_import("fiftyone.brain.internal.core.utils")
 
 
-class ClusteringConfig(fcb.BrainMethodConfig):
+class ClusteringConfig(foruns.RunConfig):
     """Clustering configuration.
 
     Args:
@@ -19,15 +19,12 @@ class ClusteringConfig(fcb.BrainMethodConfig):
             if one was provided
         model (None): the :class:`fiftyone.core.models.Model` or name of the
             zoo model that was used to compute embeddings, if known
-        patches_field (None): the sample field defining the patches being
-            analyzed, if any
     """
 
     def __init__(
         self,
         embeddings_field=None,
         model=None,
-        patches_field=None,
         cluster_field=None,
         **kwargs,
     ):
@@ -36,7 +33,6 @@ class ClusteringConfig(fcb.BrainMethodConfig):
 
         self.embeddings_field = embeddings_field
         self.model = model
-        self.patches_field = patches_field
         self.cluster_field = cluster_field
         super().__init__(**kwargs)
 
@@ -44,35 +40,28 @@ class ClusteringConfig(fcb.BrainMethodConfig):
     def type(self):
         return "clustering"
 
-    @property
-    def method(self):
-        """The name of the clustering method."""
-        raise NotImplementedError("subclass must implement method")
 
-
-class Clustering(fcb.BrainMethod):
+class Clustering(foruns.Run):
     """Base class for clustering factories.
 
     Args:
         config: a :class:`ClusteringConfig`
     """
 
-    def initialize(self, samples, brain_key):
+    def initialize(self, samples, run_key):
         """Initializes a clustering run.
 
         Args:
             samples: a :class:`fiftyone.core.collections.SampleColllection`
-            brain_key: the brain key
+            run_key: the run key
 
         Returns:
             a :class:`ClusteringResults`
         """
         raise NotImplementedError("subclass must implement initialize()")
 
-    def get_fields(self, samples, brain_key):
+    def get_fields(self, samples, run_key):
         fields = []
-        if self.config.patches_field is not None:
-            fields.append(self.config.patches_field)
 
         if self.config.embeddings_field is not None:
             fields.append(self.config.embeddings_field)
@@ -80,17 +69,15 @@ class Clustering(fcb.BrainMethod):
         return fields
 
 
-class ClusteringResults(fcb.BrainResults):
+class ClusteringResults(foruns.RunResults):
     """Base class for clustering results.
 
     Args:
         samples: the :class:`fiftyone.core.collections.SampleCollection` used
         config: the :class:`ClusteringConfig` used
-        brain_key: the brain key
+        run_key: the run key
         embeddings (None): a ``num_embeddings x num_dims`` array of embeddings
         sample_ids (None): a ``num_embeddings`` array of sample IDs
-        label_ids (None): a ``num_embeddings`` array of label IDs, if
-            applicable
         method (None): a :class:`Clustering` method
     """
 
@@ -98,42 +85,32 @@ class ClusteringResults(fcb.BrainResults):
         self,
         samples,
         config,
-        brain_key,
+        run_key,
         embeddings=None,
         sample_ids=None,
-        label_ids=None,
         method=None,
     ):
         super().__init__(
             samples,
             config,
-            brain_key,
+            run_key,
         )
 
-        embeddings, sample_ids, label_ids = self._parse_data(
+        embeddings, sample_ids, _ = self._parse_data(
             samples,
             config,
             embeddings=embeddings,
             sample_ids=sample_ids,
-            label_ids=label_ids,
         )
 
         has_sample_ids = sample_ids is not None and len(sample_ids) > 0
-        has_label_ids = label_ids is not None and len(label_ids) > 0
-        has_patches = config.patches_field is not None
 
-        if not has_sample_ids and not has_patches:
+        if not has_sample_ids:
             sample_ids = samples.values("id")
 
-        if not has_label_ids and has_patches:
-            label_ids = samples.values(
-                f"{config.patches_field}.detections.id", unwind=True
-            )
-
-        self._brain_key = brain_key
+        self._run_key = run_key
         self._embeddings = embeddings
         self._sample_ids = sample_ids
-        self._label_ids = label_ids
         self._model = None
         self._method = method
         self._clusters = None
@@ -149,23 +126,20 @@ class ClusteringResults(fcb.BrainResults):
         config,
         embeddings=None,
         sample_ids=None,
-        label_ids=None,
     ):
         if embeddings is None:
-            embeddings, sample_ids, label_ids = fbu.get_embeddings(
+            embeddings, sample_ids, _ = fbu.get_embeddings(
                 samples._dataset,
-                patches_field=config.patches_field,
                 embeddings_field=config.embeddings_field,
             )
         elif sample_ids is None:
-            sample_ids, label_ids = fbu.get_ids(
+            sample_ids, _ = fbu.get_ids(
                 samples,
-                patches_field=config.patches_field,
                 data=embeddings,
                 data_type="embeddings",
             )
 
-        return embeddings, sample_ids, label_ids
+        return embeddings, sample_ids, _
 
     def attributes(self):
         attrs = super().attributes()
@@ -182,10 +156,6 @@ class ClusteringResults(fcb.BrainResults):
     @property
     def sample_ids(self):
         return self._sample_ids
-
-    @property
-    def label_ids(self):
-        return self._label_ids
 
     def get_model(self):
         """Returns the stored model for this run.
@@ -209,7 +179,7 @@ class ClusteringResults(fcb.BrainResults):
         samples = self.samples
 
         if self.config.cluster_field is None:
-            self.config.cluster_field = self._brain_key + "_cluster"
+            self.config.cluster_field = self._run_key + "_cluster"
 
         label_strs = [str(c) for c in self._clusters]
 
@@ -219,27 +189,11 @@ class ClusteringResults(fcb.BrainResults):
         )
         samples.save()
 
-    def _assign_patch_cluster_labels(self):
-        pass
-
-    # def _assign_patch_cluster_labels(self):
-    #     samples = self.samples
-    #     patches_field = self.config.patches_field
-    #     samples.set_values(
-    #         patches_field + ".detections." + self.config.cluster_field,
-    #         self._clusters,
-    #         label_ids=self._label_ids,
-    #     )
-    #     samples.save()
-
     def _assign_cluster_labels(self):
         if self._clusters is None:
             raise ValueError("Clusters have not been computed")
 
-        if self.config.patches_field is None:
-            self._assign_sample_cluster_labels()
-        else:
-            self._assign_patch_cluster_labels()
+        self._assign_sample_cluster_labels()
 
     def get_clusters(self):
         return self._clusters

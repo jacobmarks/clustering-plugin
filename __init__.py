@@ -16,7 +16,7 @@ import fiftyone.zoo as foz
 import fiftyone.zoo.models as fozm
 from fiftyone import ViewField as F
 
-import fiftyone.core.brain as fcb
+# import fiftyone.core.brain as fcb
 import fiftyone.core.validation as fov
 import fiftyone.core.utils as fou
 from fiftyone.core.utils import add_sys_path
@@ -62,23 +62,15 @@ def _save_embeddings_to_dataset(
     samples,
     embeddings,
     embeddings_field,
-    patches_field=None,
 ):
-    if patches_field is None:
-        samples.set_values(embeddings_field, embeddings)
-    else:
-        samples.set_values(
-            patches_field + ".detections." + embeddings_field,
-            embeddings,
-        )
+    samples.set_values(embeddings_field, embeddings)
 
 
 def compute_clusters(
     samples,
-    patches_field=None,
     embeddings=None,
     embeddings_field=None,
-    brain_key=None,
+    run_key=None,
     model=None,
     force_square=False,
     alpha=None,
@@ -97,7 +89,6 @@ def compute_clusters(
         embeddings_field, embeddings_exist = fbu.parse_embeddings_field(
             samples,
             embeddings_field,
-            patches_field=patches_field,
         )
     elif embeddings is not None:
         embeddings_exist = True
@@ -117,7 +108,6 @@ def compute_clusters(
     config = _parse_config(
         method,
         embeddings_field=embeddings_field,
-        patches_field=patches_field,
         model=model,
         force_square=force_square,
         alpha=alpha,
@@ -127,17 +117,16 @@ def compute_clusters(
     clustering = config.build()
     clustering.ensure_requirements()
 
-    if brain_key is not None:
-        clustering.register_run(samples, brain_key, overwrite=False)
+    if run_key is not None:
+        clustering.register_run(samples, run_key, overwrite=False)
 
-    results = clustering.initialize(samples, brain_key)
+    results = clustering.initialize(samples, run_key)
 
     get_embeddings = embeddings is not False
     if get_embeddings:
         embeddings, _, _ = fbu.get_embeddings(
             samples,
             model=_model,
-            patches_field=patches_field,
             embeddings=embeddings,
             embeddings_field=embeddings_field,
             force_square=force_square,
@@ -155,12 +144,11 @@ def compute_clusters(
             samples,
             embeddings,
             embeddings_field,
-            patches_field=patches_field,
         )
 
     results.compute_clusters()
 
-    clustering.save_run_results(samples, brain_key, results)
+    clustering.save_run_results(samples, run_key, results)
 
     return results
 
@@ -255,15 +243,9 @@ AVAILABLE_METHODS = (
 )
 
 
-def get_embeddings(ctx, inputs, view, patches_field):
-    if patches_field is not None:
-        root, _ = view._get_label_field_root(patches_field)
-        field = view.get_field(root, leaf=True)
-        schema = field.get_field_schema(ftype=fo.VectorField)
-        embeddings_fields = set(root + "." + k for k in schema.keys())
-    else:
-        schema = view.get_field_schema(ftype=fo.VectorField)
-        embeddings_fields = set(schema.keys())
+def get_embeddings(ctx, inputs, view):
+    schema = view.get_field_schema(ftype=fo.VectorField)
+    embeddings_fields = set(schema.keys())
 
     embeddings_choices = types.AutocompleteView()
     for field_name in sorted(embeddings_fields):
@@ -342,12 +324,12 @@ def _get_zoo_models():
     return available_models
 
 
-def get_new_brain_key(
+def get_new_run_key(
     ctx,
     inputs,
-    name="brain_key",
-    label="Brain key",
-    description="Provide a brain key for this run",
+    name="run_key",
+    label="Run key",
+    description="Provide a run key for this run",
 ):
     prop = inputs.str(
         name,
@@ -356,46 +338,23 @@ def get_new_brain_key(
         description=description,
     )
 
-    brain_key = ctx.params.get(name, None)
-    if brain_key is not None and brain_key in ctx.dataset.list_brain_runs():
-        prop.invalid = True
-        prop.error_message = "Brain key already exists"
-        brain_key = None
+    run_key = ctx.params.get(name, None)
+    if run_key is not None and run_key in ctx.dataset.list_runs():
+        prop.invalid = run_key
+        prop.error_message = "Run key already exists"
+        run_key = None
 
-    return brain_key
+    return run_key
 
 
-def brain_init(ctx, inputs):
+def run_init(ctx, inputs):
     target_view = get_target_view(ctx, inputs)
 
-    brain_key = get_new_brain_key(ctx, inputs)
-    if brain_key is None and brain_key != "None":
+    run_key = get_new_run_key(ctx, inputs)
+    if run_key is None and run_key != "None":
         return False
 
-    patches_fields = _get_label_fields(
-        target_view,
-        (fo.Detection, fo.Detections, fo.Polyline, fo.Polylines),
-    )
-
-    if patches_fields:
-        patches_field_choices = types.DropdownView()
-        for field_name in sorted(patches_fields):
-            patches_field_choices.add_choice(field_name, label=field_name)
-
-        inputs.str(
-            "patches_field",
-            label="Patches field",
-            description=(
-                "An optional sample field defining the image patches in each "
-                "sample that have been/will be embedded. If omitted, the "
-                "full images are processed"
-            ),
-            view=patches_field_choices,
-        )
-
-    patches_field = ctx.params.get("patches_field", None)
-
-    get_embeddings(ctx, inputs, target_view, patches_field)
+    get_embeddings(ctx, inputs, target_view)
 
     return True
 
@@ -408,9 +367,9 @@ def _handle_basic_inputs(ctx, inputs):
             label=method,
         )
 
-    brain_key = ctx.params.get("brain_key", None)
+    run_key = ctx.params.get("run_key", None)
 
-    if brain_key:
+    if run_key:
         inputs.enum(
             "method",
             method_choices.values(),
@@ -441,7 +400,7 @@ def _handle_kmeans_inputs(ctx, inputs):
     )
 
     inputs.int(
-        "n_clusters",
+        "kmeans__n_clusters",
         label="Number of clusters",
         description="The number of clusters to create",
         default=8,
@@ -455,7 +414,7 @@ def _handle_kmeans_inputs(ctx, inputs):
         init_group.add_choice(choice, label=choice)
 
     inputs.enum(
-        "init",
+        "kmeans__init",
         init_group.values(),
         label="Initialization method",
         description="The method for initializing the cluster centroids",
@@ -465,7 +424,7 @@ def _handle_kmeans_inputs(ctx, inputs):
     )
 
     inputs.int(
-        "n_init",
+        "kmeans__n_init",
         label="Number of initializations",
         description=(
             "The number of times to run the k-means algorithm with different "
@@ -476,14 +435,14 @@ def _handle_kmeans_inputs(ctx, inputs):
     )
 
     inputs.int(
-        "max_iter",
+        "kmeans__max_iter",
         label="Maximum iterations",
         description="The maximum number of iterations to perform",
         default=300,
     )
 
     inputs.float(
-        "tol",
+        "kmeans__tol",
         label="Tolerance",
         description=(
             "The relative tolerance with regards to inertia to declare "
@@ -493,7 +452,7 @@ def _handle_kmeans_inputs(ctx, inputs):
     )
 
     inputs.int(
-        "random_state",
+        "kmeans__random_state",
         label="Random state",
         description="The random state to use for the algorithm",
     )
@@ -501,7 +460,7 @@ def _handle_kmeans_inputs(ctx, inputs):
 
 def _handle_birch_inputs(ctx, inputs):
     inputs.int(
-        "n_clusters",
+        "birch__n_clusters",
         label="Number of clusters",
         description="The number of clusters to create",
         default=3,
@@ -509,28 +468,28 @@ def _handle_birch_inputs(ctx, inputs):
     )
 
     inputs.float(
-        "threshold",
+        "birch__threshold",
         label="Threshold",
         description="The threshold to stop splitting clusters",
         default=0.5,
     )
 
     inputs.int(
-        "branching_factor",
+        "birch__branching_factor",
         label="Branching factor",
         description="The branching factor of the tree",
         default=50,
     )
 
     inputs.bool(
-        "compute_labels",
+        "birch__compute_labels",
         default=True,
         label="Compute labels",
         description="Whether to compute labels for each cluster",
     )
 
     inputs.bool(
-        "copy",
+        "birch__copy",
         default=True,
         label="Copy",
         description="Whether to copy the input data",
@@ -539,7 +498,7 @@ def _handle_birch_inputs(ctx, inputs):
 
 def _handle_agglomerative_inputs(ctx, inputs):
     inputs.int(
-        "n_clusters",
+        "agglomerative__n_clusters",
         label="Number of clusters",
         description="The number of clusters to create",
         default=2,
@@ -553,7 +512,7 @@ def _handle_agglomerative_inputs(ctx, inputs):
         linkage_group.add_choice(choice, label=choice)
 
     inputs.enum(
-        "linkage",
+        "agglomerative__linkage",
         linkage_group.values(),
         label="Linkage",
         description="The linkage criterion to use",
@@ -568,7 +527,7 @@ def _handle_agglomerative_inputs(ctx, inputs):
         metric_group.add_choice(choice, label=choice)
 
     inputs.enum(
-        "metric",
+        "agglomerative__metric",
         metric_group.values(),
         label="Metric",
         description="The metric to use",
@@ -577,25 +536,25 @@ def _handle_agglomerative_inputs(ctx, inputs):
     )
 
     inputs.int(
-        "connectivity",
+        "agglomerative__connectivity",
         label="Connectivity",
         description="The connectivity to use",
     )
 
     inputs.float(
-        "distance_threshold",
+        "agglomerative__distance_threshold",
         label="Distance threshold",
         description="The distance threshold to use",
     )
 
     inputs.bool(
-        "compute_full_tree",
+        "agglomerative__compute_full_tree",
         label="Compute full tree",
         description="Whether to compute the full tree",
     )
 
     inputs.bool(
-        "compute_distances",
+        "agglomerative__compute_distances",
         label="Compute distances",
         description="Whether to compute distances",
         default=False,
@@ -630,7 +589,7 @@ class ComputeClusters(foo.Operator):
             label="Clustering", description="Create clusters from embeddings"
         )
 
-        ready = brain_init(ctx, inputs)
+        ready = run_init(ctx, inputs)
         if not ready:
             return types.Property(inputs, view=form_view)
 
@@ -650,27 +609,114 @@ class ComputeClusters(foo.Operator):
         target_view = get_target_view(ctx, target)
 
         method = kwargs.pop("method", None)
-        patches_field = kwargs.pop("patches_field", None)
         embeddings = kwargs.pop("embeddings", None)
         embeddings_field = kwargs.pop("embeddings_field", None)
-        brain_key = kwargs.pop("brain_key")
+        run_key = kwargs.pop("run_key")
         model = kwargs.pop("model", None)
         cluster_field = kwargs.pop("cluster_field", None)
 
+        method_start_str = f"{method}__"
+        method_kwargs = {
+            k[len(method_start_str) :]: v
+            for k, v in kwargs.items()
+            if k.startswith(method_start_str)
+        }
+
         compute_clusters(
             target_view,
-            brain_key=brain_key,
+            run_key=run_key,
             method=method,
             model=model,
-            patches_field=patches_field,
             cluster_field=cluster_field,
             embeddings_field=embeddings_field,
             embeddings=embeddings,
-            **kwargs,
+            **method_kwargs,
         )
 
         ctx.trigger("reload_dataset")
 
 
+def _get_clustering_run_keys(ctx):
+    clustering_run_keys = []
+
+    run_keys = ctx.dataset.list_runs()
+    for key in run_keys:
+        run_info = ctx.dataset.get_run_info(key)
+        if run_info.config.method in AVAILABLE_METHODS:
+            clustering_run_keys.append(key)
+
+    return sorted(clustering_run_keys)
+
+
+def _execute_run_info(ctx, run_key):
+    info = ctx.dataset.get_run_info(run_key)
+
+    timestamp = info.timestamp.strftime("%Y-%M-%d %H:%M:%S")
+    version = info.version
+    config = info.config.serialize()
+    config = {k: v for k, v in config.items() if v is not None}
+
+    return {
+        "run_key": run_key,
+        "timestamp": timestamp,
+        "version": version,
+        "config": config,
+    }
+
+
+def _initialize_run_output():
+    outputs = types.Object()
+    outputs.str("run_key", label="Run key")
+    outputs.str("timestamp", label="Creation time")
+    outputs.str("version", label="FiftyOne version")
+    outputs.obj("config", label="Config", view=types.JSONView())
+    return outputs
+
+
+class GetClusteringRunInfo(foo.Operator):
+    @property
+    def config(self):
+        _config = foo.OperatorConfig(
+            name="get_clustering_run_info",
+            label="Clustering: get run info",
+            dynamic=True,
+        )
+        _config.icon = "/assets/icon.svg"
+        return _config
+
+    def resolve_input(self, ctx):
+        inputs = types.Object()
+        form_view = types.View(
+            label="Clustering",
+            description="Get information about a clustering run",
+        )
+
+        run_keys = _get_clustering_run_keys(ctx)
+        run_choices = types.DropdownView()
+        for run_key in run_keys:
+            run_choices.add_choice(run_key, label=run_key)
+
+        inputs.enum(
+            "run_key",
+            run_choices.values(),
+            label="Run key",
+            description="The run key to retrieve information for",
+            required=True,
+            view=types.DropdownView(),
+        )
+
+        return types.Property(inputs, view=form_view)
+
+    def execute(self, ctx):
+        run_key = ctx.params.get("run_key", None)
+        return _execute_run_info(ctx, run_key)
+
+    def resolve_output(self, ctx):
+        outputs = _initialize_run_output()
+        view = types.View(label="Clustering run info")
+        return types.Property(outputs, view=view)
+
+
 def register(plugin):
     plugin.register(ComputeClusters)
+    plugin.register(GetClusteringRunInfo)
