@@ -6,7 +6,7 @@ This plugin provides a FiftyOne App that allows you to cluster your dataset usin
 - Birch
 - Agglomerative
 
-It also serves as a proof of concept for adding new "types" of runs to FiftyOne, or the FiftyOne Brain!!!
+It also serves as a proof of concept for adding new "types" of runs to FiftyOne!!!
 
 ## Installation
 
@@ -14,28 +14,40 @@ It also serves as a proof of concept for adding new "types" of runs to FiftyOne,
 fiftyone plugins download https://github.com/jacobmarks/clustering-runs-plugin
 ```
 
-## Operators
+You will also need to have `scikit-learn` installed:
 
-This plugin adds a `compute_clusters` operator, in direct analogy with `compute_similarity`, `compute_visualization`, and other Brain methods.
+```bash
+pip install -U scikit-learn
+```
 
 ## Usage
 
-Here are some of the ways you can use this plugin:
+Once you have the plugin installed, you can generate clusters for your dataset using the
+`compute_clusters` operator:
+
+INSERT GIF
+
+The specific arguments depend on the `method` you choose — `kmeans`, `birch`, or `agglomerative`.
+
+Here, we are generating clusters at the same time as we are generating the embeddings, but you can also generate clusters from existing embeddings:
+
+INSERT GIF
 
 You can generate clusters for:
 
-A. Your entire dataset
-B. A view of your dataset
-C. Currently selected samples in the App
+- Your entire dataset
+- A view of your dataset
+- Currently selected samples in the App
 
-You can run the operator in:
+Additionally, you can run the operator in:
 
-A. Real-time
-B. In the background, as a delegated operation
+- Real-time, or
+- In the background, as a delegated operation
 
-## To Do
+Once you have generated clusters, you can view information about the clusters in the App with the `get_clustering_run_info` operator:
 
-- [ ] Validate edge cases with embeddings and `embeddings_field`
-- [ ] Fully extend support to patches
-- [ ] Add more clustering algorithms
-- [ ] Add `compute_centroids` and other useful utility operators
+INSERT GIF
+
+Finally, it is insightful to use clustering in conjunction with `compute_visualization` to visualize the clusters:
+
+INSERT GIF
