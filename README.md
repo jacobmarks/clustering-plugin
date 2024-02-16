@@ -25,13 +25,15 @@ pip install -U scikit-learn
 Once you have the plugin installed, you can generate clusters for your dataset using the
 `compute_clusters` operator:
 
-INSERT GIF
+![compute_clusters_from_scratch](https://github.com/jacobmarks/clustering-runs-plugin/assets/12500356/c701d40a-ddf4-47a7-bb5d-8f026a54bb6e)
+
 
 The specific arguments depend on the `method` you choose — `kmeans`, `birch`, or `agglomerative`.
 
 Here, we are generating clusters at the same time as we are generating the embeddings, but you can also generate clusters from existing embeddings:
 
-INSERT GIF
+![compute_clusters_from_embeddings](https://github.com/jacobmarks/clustering-runs-plugin/assets/12500356/950c10d7-9d7e-4876-a2ea-66574e594607)
+
 
 You can generate clusters for:
 
@@ -46,8 +48,9 @@ Additionally, you can run the operator in:
 
 Once you have generated clusters, you can view information about the clusters in the App with the `get_clustering_run_info` operator:
 
-INSERT GIF
+![get_cluster_info](https://github.com/jacobmarks/clustering-runs-plugin/assets/12500356/63660858-091f-4a94-865e-a3fb41c2c2c6)
+
 
 Finally, it is insightful to use clustering in conjunction with `compute_visualization` to visualize the clusters:
 
-INSERT GIF
+![visualize_clusters](https://github.com/jacobmarks/clustering-runs-plugin/assets/12500356/2c48fdcb-c59c-4b46-a27f-a248a6974d4c)
