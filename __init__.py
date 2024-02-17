@@ -188,54 +188,6 @@ def _execution_mode(ctx, inputs):
         )
 
 
-def _list_target_views(ctx, inputs):
-    has_view = ctx.view != ctx.dataset.view()
-    has_selected = bool(ctx.selected)
-    default_target = "DATASET"
-    if has_view or has_selected:
-        target_choices = types.RadioGroup()
-        target_choices.add_choice(
-            "DATASET",
-            label="Entire dataset",
-            description="Run clustering on the entire dataset",
-        )
-
-        if has_view:
-            target_choices.add_choice(
-                "CURRENT_VIEW",
-                label="Current view",
-                description="Run clustering on the current view",
-            )
-            default_target = "CURRENT_VIEW"
-
-        if has_selected:
-            target_choices.add_choice(
-                "SELECTED_SAMPLES",
-                label="Selected samples",
-                description="Run clustering on the selected samples",
-            )
-            default_target = "SELECTED_SAMPLES"
-
-        inputs.enum(
-            "target",
-            target_choices.values(),
-            default=default_target,
-            view=target_choices,
-        )
-    else:
-        ctx.params["target"] = "DATASET"
-
-
-def get_target_view(ctx, target):
-    if target == "SELECTED_SAMPLES":
-        return ctx.view.select(ctx.selected)
-
-    if target == "DATASET":
-        return ctx.dataset
-
-    return ctx.view
-
-
 AVAILABLE_METHODS = (
     "kmeans",
     "birch",
@@ -348,7 +300,7 @@ def get_new_run_key(
 
 
 def run_init(ctx, inputs):
-    target_view = get_target_view(ctx, inputs)
+    target_view = ctx.target_view()
 
     run_key = get_new_run_key(ctx, inputs)
     if run_key is None and run_key != "None":
@@ -595,7 +547,7 @@ class ComputeClusters(foo.Operator):
 
         _handle_basic_inputs(ctx, inputs)
         _handle_method_input_routing(ctx, inputs)
-        _list_target_views(ctx, inputs)
+        inputs.view_target(ctx)
         _execution_mode(ctx, inputs)
 
         return types.Property(inputs, view=form_view)
@@ -605,8 +557,7 @@ class ComputeClusters(foo.Operator):
 
     def execute(self, ctx):
         kwargs = ctx.params.copy()
-        target = kwargs.pop("target", None)
-        target_view = get_target_view(ctx, target)
+        target_view = ctx.target_view()
 
         method = kwargs.pop("method", None)
         embeddings = kwargs.pop("embeddings", None)
