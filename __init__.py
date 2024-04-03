@@ -6,6 +6,8 @@
 """
 
 import os
+import base64
+import requests
 
 import eta.core.utils as etau
 
@@ -66,6 +68,67 @@ def _save_embeddings_to_dataset(
     samples.set_values(embeddings_field, embeddings)
 
 
+def allows_openai_models():
+    """Returns whether the current environment allows openai models."""
+    return "OPENAI_API_KEY" in os.environ
+
+
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+
+
+QUERY_TEXT = """
+You are a helpful computer vision assistant tasked with labeling clusters of images.
+Below, you will find 5 images that have all been clustered together by an unsupervised clustering algorithm.
+Your task is to provide a one to two word label describing this cluster of images. Just
+provide the label — your best guess — and we'll take care of the rest. Do not explain your reasoning or provide any additional context.
+"""
+
+
+def query_gpt4v(filepaths):
+    """Queries the GPT-4 Vision model."""
+    query_text = QUERY_TEXT
+    max_tokens = 10
+
+    messages_content = []
+    text_message = {"type": "text", "text": query_text}
+    messages_content.append(text_message)
+    for filepath in filepaths:
+        base64_image = encode_image(filepath)
+        image_message = {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+        }
+        messages_content.append(image_message)
+
+    payload = {
+        "model": "gpt-4-vision-preview",
+        "messages": [{"role": "user", "content": messages_content}],
+        "max_tokens": max_tokens,
+    }
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+
+    response = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers=headers,
+        json=payload,
+    )
+
+    content = response.json()
+    if type(content) == str:
+        return content
+    elif "error" in content:
+        return None
+    else:
+        return content["choices"][0]["message"]["content"]
+
+
 def compute_clusters(
     samples,
     embeddings=None,
@@ -77,6 +140,7 @@ def compute_clusters(
     batch_size=None,
     skip_failures=True,
     method=None,
+    label_with_gpt4v=False,
     **kwargs,
 ):
     fov.validate_collection(samples)
@@ -112,6 +176,7 @@ def compute_clusters(
         force_square=force_square,
         alpha=alpha,
         skip_failures=skip_failures,
+        label_with_gpt4v=label_with_gpt4v,
         **kwargs,
     )
     clustering = config.build()
@@ -668,6 +733,95 @@ class GetClusteringRunInfo(foo.Operator):
         return types.Property(outputs, view=view)
 
 
+def _is_an_int(string):
+    try:
+        int(string)
+        return True
+    except ValueError:
+        return False
+
+
+class LabelClustersWithGPT4V(foo.Operator):
+    @property
+    def config(self):
+        _config = foo.OperatorConfig(
+            name="label_clusters_with_gpt4v",
+            label="Clustering: label clusters with GPT-4 Vision",
+            dynamic=True,
+        )
+        _config.icon = "/assets/gpt_icon.svg"
+        return _config
+
+    def resolve_input(self, ctx):
+        inputs = types.Object()
+        form_view = types.View(
+            label="Clustering",
+            description="Label clusters with GPT-4 Vision",
+        )
+
+        allowed = allows_openai_models()
+        if not allowed:
+            inputs.view(
+                "warning",
+                types.Warning(
+                    label="No OPENAI API KEY found!",
+                    description="To use this operator, you must set the OPENAI_API_KEY environment variable",
+                ),
+            )
+            inputs.str("add_key", required=True, view=types.HiddenView())
+            return types.Property(inputs, view=types.View())
+
+        run_keys = _get_clustering_run_keys(ctx)
+        run_choices = types.DropdownView()
+        for run_key in run_keys:
+            run_choices.add_choice(run_key, label=run_key)
+
+        inputs.enum(
+            "run_key",
+            run_choices.values(),
+            label="Run key",
+            description="The run key to label",
+            required=True,
+            view=types.DropdownView(),
+        )
+
+        inputs.bool(
+            "delegate",
+            default=False,
+            label="Delegate execution?",
+            description="Check this box to delegate execution of this task",
+        )
+
+        return types.Property(inputs, view=form_view)
+
+    def resolve_delegation(self, ctx):
+        return ctx.params.get("delegate", False)
+
+    def execute(self, ctx):
+        run_key = ctx.params.get("run_key", None)
+        run_info = ctx.dataset.get_run_info(run_key)
+        cluster_field = run_info.config.cluster_field or f"{run_key}_cluster"
+
+        initial_labels = ctx.dataset.distinct(cluster_field)
+
+        from tqdm import tqdm
+
+        for label in tqdm(initial_labels):
+            if not _is_an_int(label):
+                continue
+            view = ctx.dataset.match(F(cluster_field) == label)
+            fps = view.shuffle().limit(5).values("filepath")
+
+            gpt4v_label = query_gpt4v(fps)
+            if gpt4v_label is not None and gpt4v_label != "":
+                gls = [gpt4v_label] * view.count()
+                view.set_values(cluster_field, gls)
+                view.save()
+
+        ctx.ops.reload_dataset()
+
+
 def register(plugin):
     plugin.register(ComputeClusters)
+    plugin.register(LabelClustersWithGPT4V)
     plugin.register(GetClusteringRunInfo)
