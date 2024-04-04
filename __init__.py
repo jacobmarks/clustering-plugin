@@ -649,7 +649,7 @@ class ComputeClusters(foo.Operator):
             **method_kwargs,
         )
 
-        ctx.trigger("reload_dataset")
+        ctx.ops.reload_dataset()
 
 
 def _get_clustering_run_keys(ctx):
