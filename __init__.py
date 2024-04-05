@@ -43,6 +43,9 @@ with add_sys_path(os.path.dirname(os.path.abspath(__file__))):
     # pylint: disable=no-name-in-module,import-error
     from methods.agglomerative import AgglomerativeClusteringConfig
 
+    # pylint: disable=no-name-in-module,import-error
+    from methods.hdbscan import HDBSCANClusteringConfig
+
 
 def _parse_config(method, **kwargs):
     if method is None:
@@ -54,6 +57,8 @@ def _parse_config(method, **kwargs):
         config_cls = BirchClusteringConfig
     elif method == "agglomerative":
         config_cls = AgglomerativeClusteringConfig
+    elif method == "hdbscan":
+        config_cls = HDBSCANClusteringConfig
     else:
         raise ValueError("Unsupported method '%s'" % method)
 
@@ -257,6 +262,7 @@ AVAILABLE_METHODS = (
     "kmeans",
     "birch",
     "agglomerative",
+    "hdbscan",
 )
 
 
@@ -578,6 +584,85 @@ def _handle_agglomerative_inputs(ctx, inputs):
     )
 
 
+def _handle_hdbscan_inputs(ctx, inputs):
+    inputs.int(
+        "hdbscan__min_cluster_size",
+        label="Min cluster size",
+        description="The minimum number of samples in a cluster",
+        default=5,
+        required=True,
+    )
+
+    inputs.int(
+        "hdbscan__min_samples",
+        label="Min samples",
+        description="The number of samples in a neighborhood for a point to be considered a core point",
+    )
+
+    inputs.float(
+        "hdbscan__cluster_selection_epsilon",
+        label="Cluster selection epsilon",
+        description="A distance threshold. Clusters below this value will be merged",
+        default=0.0,
+    )
+
+    inputs.int(
+        "hdbscan__max_cluster_size",
+        label="Max cluster size",
+        description="The maximum number of samples in a cluster",
+    )
+
+    metric_choices = ("euclidean", "l1", "l2", "manhattan", "cosine")
+    metric_group = types.DropdownView()
+
+    for choice in metric_choices:
+        metric_group.add_choice(choice, label=choice)
+
+    inputs.enum(
+        "hdbscan__metric",
+        metric_group.values(),
+        label="Metric",
+        description="The metric used to compute the linkage",
+        view=metric_group,
+        default=metric_choices[0],
+    )
+
+    inputs.float(
+        "hdbscan__alpha",
+        label="Alpha",
+        description="A distance scaling parameter as used in robust single linkage",
+        default=1.0,
+    )
+
+    algorithm_choices = ("auto", "brute", "kd_tree", "ball_tree")
+    algorithm_group = types.DropdownView()
+
+    for choice in algorithm_choices:
+        algorithm_group.add_choice(choice, label=choice)
+
+    inputs.enum(
+        "hdbscan__algorithm",
+        algorithm_group.values(),
+        label="Algorithm",
+        description="The algorithm to use",
+        view=algorithm_group,
+        default=algorithm_choices[0],
+    )
+
+    inputs.int(
+        "hdbscan__leaf_size",
+        label="Leaf size",
+        description="Leaf size for trees responsible for fast nearest neighbor queries when a KDTree or a BallTree are used as core-distance algorithms",
+        default=40,
+    )
+
+    cluster_selection_method_choices = ("eom", "leaf")
+    cluster_selection_method_group = types.DropdownView()
+
+    for choice in cluster_selection_method_choices:
+        cluster_selection_method_group.add_choice(choice, label=choice)
+
+
 def _handle_method_input_routing(ctx, inputs):
     method = ctx.params.get("method", None)
 
@@ -587,6 +672,8 @@ def _handle_method_input_routing(ctx, inputs):
         _handle_birch_inputs(ctx, inputs)
     elif method == "agglomerative":
         _handle_agglomerative_inputs(ctx, inputs)
+    elif method == "hdbscan":
+        _handle_hdbscan_inputs(ctx, inputs)
 
 
 class ComputeClusters(foo.Operator):

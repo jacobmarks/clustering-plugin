@@ -1,7 +1,7 @@
 fiftyone:
   version: ">=0.23.7"
 name: "@jacobmarks/clustering"
-version: "0.1.4"
+version: "0.1.5"
 description: "Run unsupervised clustering on your images!"
 url: "https://github.com/jacobmarks/image-clustering-plugin"
 operators:
