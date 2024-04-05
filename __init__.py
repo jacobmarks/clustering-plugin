@@ -612,7 +612,7 @@ def _handle_hdbscan_inputs(ctx, inputs):
         description="The maximum number of samples in a cluster",
     )
 
-    metric_choices = ("euclidean", "l1", "l2", "manhattan", "cosine")
+    metric_choices = ("euclidean", "l1", "l2", "manhattan")
     metric_group = types.DropdownView()
 
     for choice in metric_choices:

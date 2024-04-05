@@ -32,8 +32,7 @@ class HDBSCANClusteringConfig(ClusteringConfig):
             There is no limit when max_cluster_size=None. Has no effect if
             ``cluster_selection_method="leaf"``.
         metric (``'euclidean'``): The metric used to compute the linkage. Can
-            be ``'euclidean'``, ``'l1'``, ``'l2'``, ``'manhattan'``, or
-            ``'cosine'``,
+            be ``'euclidean'``, ``'l1'``, ``'l2'``, or ``'manhattan'``.
         alpha (1.0): A distance scaling parameter as used in robust single
             linkage.
         algorithm (`"auto"`): The algorithm to use. Can be ``"brute"``,
