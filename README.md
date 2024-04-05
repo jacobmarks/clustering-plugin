@@ -13,7 +13,7 @@ It also serves as a proof of concept for adding new "types" of runs to FiftyOne!
 ## Installation
 
 ```bash
-fiftyone plugins download https://github.com/jacobmarks/clustering-runs-plugin
+fiftyone plugins download https://github.com/jacobmarks/clustering-plugin
 ```
 
 You will also need to have `scikit-learn` installed:
