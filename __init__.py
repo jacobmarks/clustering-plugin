@@ -18,7 +18,6 @@ import fiftyone.zoo as foz
 import fiftyone.zoo.models as fozm
 from fiftyone import ViewField as F
 
-# import fiftyone.core.brain as fcb
 import fiftyone.core.validation as fov
 import fiftyone.core.utils as fou
 from fiftyone.core.utils import add_sys_path
@@ -92,7 +91,7 @@ provide the label — your best guess — and we'll take care of the rest. Do no
 
 
 def query_gpt4v(filepaths):
-    """Queries the GPT-4 Vision model."""
+    """Queries the GPT-4o model."""
     query_text = QUERY_TEXT
     max_tokens = 10
 
@@ -108,7 +107,7 @@ def query_gpt4v(filepaths):
         messages_content.append(image_message)
 
     payload = {
-        "model": "gpt-4-vision-preview",
+        "model": "gpt-4o",
         "messages": [{"role": "user", "content": messages_content}],
         "max_tokens": max_tokens,
     }
@@ -341,8 +340,12 @@ def _get_label_fields(sample_collection, label_types):
 def _get_zoo_models():
     available_models = set()
     for model in fozm._load_zoo_models_manifest():
-        if model.has_tag("embeddings"):
-            available_models.add(model.name)
+        try:
+            # pylint: disable=no-member
+            if model.has_tag("embeddings"):
+                available_models.add(model.name)
+        except:
+            pass
 
     return available_models
 
