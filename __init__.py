@@ -334,13 +334,14 @@ def get_embeddings(ctx, inputs, view):
 
 def _get_zoo_models():
     available_models = set()
-    for model in fozm._load_zoo_models_manifest():
-        try:
-            # pylint: disable=no-member
-            if model.has_tag("embeddings"):
-                available_models.add(model.name)
-        except:
-            pass
+    manifest = fozm._load_zoo_models_manifest()
+    if isinstance(manifest, tuple):
+        manifest = manifest[0]
+
+    for model in manifest:
+        # pylint: disable=no-member
+        if model.has_tag("embeddings"):
+            available_models.add(model.name)
 
     return available_models
 
@@ -407,6 +408,7 @@ def _handle_basic_inputs(ctx, inputs):
                 "The name of the sample field in which to store the cluster "
                 "labels. If omitted, a default field name will be used"
             ),
+            required=True,
         )
 
 
