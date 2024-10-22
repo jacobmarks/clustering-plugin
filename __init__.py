@@ -332,11 +332,6 @@ def get_embeddings(ctx, inputs, view):
             )
 
 
-def _get_label_fields(sample_collection, label_types):
-    schema = sample_collection.get_field_schema(embedded_doc_type=label_types)
-    return list(schema.keys())
-
-
 def _get_zoo_models():
     available_models = set()
     for model in fozm._load_zoo_models_manifest():
